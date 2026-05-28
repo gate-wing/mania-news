@@ -1,0 +1,16 @@
+# Excel（NASに保存するため不要）
+*.xlsx
+*.xls
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 一時ファイル
+*.tmp
+~$*
+
+# OS
+.DS_Store
+Thumbs.db
