@@ -198,7 +198,7 @@ def find_news_subpages(html, base_url):
 
 
 def get_site_articles(url, border_date):
-    """対象URLから直近1年分の記事リストを一括取得する"""
+    """対象URLから直近2年分の記事リストを一括取得する"""
     articles = from_rss(url, border_date)
     if articles:
         return articles
@@ -250,7 +250,7 @@ for i, site in enumerate(TARGET_SITES, 1):
     print(f"\n[{i}] {site_name}")
     print(f"     URL: {url}")
 
-    # 直近1年分の記事を取得
+    # 直近2年分の記事を取得
     articles = get_site_articles(url, border_date)
     
     # シートの作成
@@ -266,7 +266,7 @@ for i, site in enumerate(TARGET_SITES, 1):
     
     if articles and articles[0]['title'] != 'エラー':
         articles.sort(key=lambda x: x['date'] if x['date'] else datetime.min, reverse=True)
-        print(f"     → 直近1年の記事を {len(articles)} 件検出しました。")
+        print(f"     → 直近2年の記事を {len(articles)} 件検出しました。")
         for a in articles:
             date_str = a['date'].strftime('%Y年%m月%d日') if a['date'] else '不明'
             
@@ -278,8 +278,8 @@ for i, site in enumerate(TARGET_SITES, 1):
         print(f"     → {articles[0]['content']}")
         ws.append(['エラー', articles[0]['content'], '', ''])
     else:
-        print("     → 直近1年の記事は検出されませんでした。")
-        ws.append(['該当なし', '直近1年のお知らせは見つかりませんでした。', '', ''])
+        print("     → 直近2年の記事は検出されませんでした。")
+        ws.append(['該当なし', '直近2年のお知らせは見つかりませんでした。', '', ''])
         
     # ★変更点②：見栄え（フォント・固定幅・折り返し・上揃え）の大幅調整
     font = Font(name='游ゴシック')
