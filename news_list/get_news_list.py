@@ -2,6 +2,8 @@ import urllib.request
 import re
 import ssl
 import json
+import shutil
+import tempfile
 from datetime import datetime, timedelta
 import time
 import email.utils
@@ -277,7 +279,7 @@ def get_site_articles(url, border_date):
 
 
 # ===== メイン実行処理 =====
-print(f"💡 設定されたマニアシリーズ計 {len(TARGET_SITES)} 店舗を順に処理します。\n")
+print(f"設定されたマニアシリーズ計 {len(TARGET_SITES)} 店舗を順に処理します。\n")
 print(f"{'='*60}")
 
 # Excelの初期化
@@ -351,6 +353,27 @@ for i, site in enumerate(TARGET_SITES, 1):
     time.sleep(1)
 
 print(f"\n{'='*60}")
-os.makedirs(_save_folder, exist_ok=True)
-wb.save(output_file)
-print(f"すべての処理が完了しました！\n出力ファイル: {output_file}")
+
+# ローカルの一時ファイルに保存してからNASにコピー
+local_backup = os.path.join(os.path.expanduser('~'), 'Desktop', _filename)
+
+with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+    tmp_path = tmp.name
+
+try:
+    wb.save(tmp_path)
+
+    # NASへのコピーを試みる
+    os.makedirs(_save_folder, exist_ok=True)
+    try:
+        shutil.copy2(tmp_path, output_file)
+        print(f"すべての処理が完了しました！\n出力ファイル: {output_file}")
+    except PermissionError:
+        # NASが使用中の場合はデスクトップに保存
+        shutil.copy2(tmp_path, local_backup)
+        print(f"[注意] NASのファイルが他のユーザーに開かれているため上書きできませんでした。")
+        print(f"デスクトップに保存しました: {local_backup}")
+        print(f"NASのファイルを閉じてから手動でコピーしてください。")
+        print(f"コピー先: {output_file}")
+finally:
+    os.remove(tmp_path)
