@@ -100,9 +100,9 @@ def clean_sheet_title(title):
 # ===== 方法① RSSフィード =====
 def from_rss(base_url, border_date):
     feed_candidates = [
-        base_url.rstrip('/') + '/feed/',
-        base_url.rstrip('/') + '/?feed=rss2',
-        base_url.rstrip('/') + '/feed/rss/',
+        base_url.rstrip('/') + '/feed/?posts_per_rss=100',
+        base_url.rstrip('/') + '/?feed=rss2&posts_per_rss=100',
+        base_url.rstrip('/') + '/feed/rss/?posts_per_rss=100',
     ]
     today = datetime.now()
     articles = []
