@@ -1,13 +1,13 @@
 import urllib.request
 import re
 import ssl
+import json
 from datetime import datetime, timedelta
 import time
 import email.utils
 from urllib.parse import urlparse, urljoin
 import os
 import openpyxl
-# ★変更点：Alignment（配置設定）を追加インポート
 from openpyxl.styles import Font, Alignment
 
 # ==========================================
@@ -97,21 +97,60 @@ def clean_sheet_title(title):
     return clean[:30]
 
 
-# ===== 方法① RSSフィード =====
+# ===== 方法① WordPress REST API =====
+def from_rest_api(base_url, border_date):
+    today = datetime.now()
+    articles = []
+    page = 1
+
+    while True:
+        url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts?per_page=100&page={page}&orderby=date&order=desc"
+        try:
+            req = urllib.request.Request(url, headers=HEADERS)
+            res = urllib.request.urlopen(req, context=ctx, timeout=15)
+            data = json.loads(res.read().decode('utf-8', errors='ignore'))
+            if not data:
+                break
+            reached_limit = False
+            for post in data:
+                try:
+                    d = datetime.strptime(post.get('date', '')[:10], '%Y-%m-%d')
+                except Exception:
+                    continue
+                if d < border_date:
+                    reached_limit = True
+                    break
+                if border_date <= d <= today:
+                    title   = strip_tags(post.get('title',   {}).get('rendered', ''))
+                    content = strip_tags(post.get('content', {}).get('rendered', ''))
+                    articles.append({
+                        'date': d,
+                        'title': title,
+                        'content': content,
+                        'method': 'REST API'
+                    })
+            if reached_limit:
+                break
+            page += 1
+        except Exception:
+            break
+    return articles
+
+
+# ===== 方法② RSSフィード（ページネーション対応） =====
 def from_rss(base_url, border_date):
-    feed_candidates = [
-        base_url.rstrip('/') + '/feed/?posts_per_rss=100',
-        base_url.rstrip('/') + '/?feed=rss2&posts_per_rss=100',
-        base_url.rstrip('/') + '/feed/rss/?posts_per_rss=100',
-    ]
     today = datetime.now()
     articles = []
 
-    for feed_url in feed_candidates:
+    for page in range(1, 20):
+        feed_url = f"{base_url.rstrip('/')}/feed/?paged={page}"
         try:
             raw = fetch_html(feed_url, timeout=10)
             items = re.findall(r'<item[^>]*>(.*?)</item>', raw, re.DOTALL | re.IGNORECASE)
-            
+            if not items:
+                break
+
+            page_articles = []
             for item in items:
                 d = None
                 pub = re.search(r'<pubDate>([^<]+)</pubDate>', item, re.IGNORECASE)
@@ -119,35 +158,37 @@ def from_rss(base_url, border_date):
                     parsed = email.utils.parsedate(pub.group(1).strip())
                     if parsed:
                         d = to_date(parsed[0], parsed[1], parsed[2])
-                
+
                 dc = re.search(r'<dc:date>([^<]+)</dc:date>', item, re.IGNORECASE)
                 if dc and not d:
                     m = re.match(r'(20\d{2})-(0?[1-9]|1[0-2])-(0?[1-9]|[12]\d|3[01])', dc.group(1))
                     if m:
                         d = to_date(m.group(1), m.group(2), m.group(3))
-                
+
                 if d and border_date <= d <= today:
                     title_match = re.search(r'<title[^>]*>(.*?)</title>', item, re.DOTALL | re.IGNORECASE)
                     title = title_match.group(1).strip() if title_match else 'タイトルなし'
                     title = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', title, flags=re.DOTALL)
-                    
+
                     content_match = re.search(r'<content:encoded[^>]*>(.*?)</content:encoded>', item, re.DOTALL | re.IGNORECASE)
                     if not content_match:
                         content_match = re.search(r'<description[^>]*>(.*?)</description>', item, re.DOTALL | re.IGNORECASE)
-                    
+
                     content = content_match.group(1).strip() if content_match else ''
                     content = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', content, flags=re.DOTALL)
-                    
-                    articles.append({
+
+                    page_articles.append({
                         'date': d,
                         'title': strip_tags(title),
                         'content': strip_tags(content),
-                        'method': f'RSS({feed_url})'
+                        'method': f'RSS(paged={page})'
                     })
-            if articles:
-                return articles
+
+            if not page_articles:
+                break
+            articles.extend(page_articles)
         except Exception:
-            pass
+            break
     return articles
 
 
@@ -199,6 +240,10 @@ def find_news_subpages(html, base_url):
 
 def get_site_articles(url, border_date):
     """対象URLから直近2年分の記事リストを一括取得する"""
+    articles = from_rest_api(url, border_date)
+    if articles:
+        return articles
+
     articles = from_rss(url, border_date)
     if articles:
         return articles
